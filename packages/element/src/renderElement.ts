@@ -73,6 +73,7 @@ import {
 import { getContainingFrame } from "./frame";
 import { getCornerRadius } from "./utils";
 
+import { getAnimatedImageFrame } from "./animatedImage";
 import { ShapeCache } from "./shape";
 import {
   getStickyNoteFooter,
@@ -552,6 +553,13 @@ const drawElementOnCanvas = (
           : undefined;
 
         if (img != null && !(img instanceof Promise)) {
+          // animated images draw the frame matching the animation clock
+          const source: CanvasImageSource = cacheEntry?.animation
+            ? getAnimatedImageFrame(
+                cacheEntry.animation,
+                renderConfig.animationClock?.time ?? 0,
+              ).bitmap
+            : img;
           if (element.roundness && context.roundRect) {
             context.beginPath();
             context.roundRect(
@@ -589,7 +597,7 @@ const drawElementOnCanvas = (
             if (tempContext) {
               tempContext.scale(devicePixelRatio, devicePixelRatio);
               tempContext.drawImage(
-                img,
+                source,
                 x,
                 y,
                 width,
@@ -634,7 +642,7 @@ const drawElementOnCanvas = (
             }
 
             context.drawImage(
-              img,
+              source,
               x,
               y,
               width,
@@ -720,6 +728,14 @@ const drawElementOnCanvas = (
     }
   }
 };
+
+/** an image whose cache entry carries decoded animation frames */
+const isAnimatedImageElement = (
+  element: ExcalidrawElement,
+  renderConfig: StaticCanvasRenderConfig,
+) =>
+  isInitializedImageElement(element) &&
+  !!renderConfig.imageCache.get(element.fileId)?.animation;
 
 export const elementWithCanvasCache = new WeakMap<
   ExcalidrawElement,
@@ -1164,7 +1180,12 @@ const drawElement = (
     case "text":
     case "iframe":
     case "embeddable": {
-      if (renderConfig.isExporting) {
+      // animated images change every frame, so they skip the per-element
+      // bitmap cache and take the direct path, like exports do
+      if (
+        renderConfig.isExporting ||
+        isAnimatedImageElement(element, renderConfig)
+      ) {
         const [x1, y1, x2, y2] = getElementAbsoluteCoords(element, elementsMap);
         const centerX = (x1 + x2) / 2;
         const centerY = (y1 + y2) / 2;

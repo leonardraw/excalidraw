@@ -13,6 +13,10 @@ Please add the latest change on the top under the correct section.
 
 ## Unreleased
 
+### Animated GIF images (2026-10-27)
+
+Animated GIFs inserted as `image` elements now play on the canvas. A GIF is decoded once into frames when it enters the image cache (gifuct-js), the renderer draws the frame matching an animation clock, and only the region of the images whose frame changed is repainted between full renders, so the cost doesn't depend on how many other elements are visible. Exports are unchanged: PNG renders the first frame, SVG embeds the GIF as `<image>` (animated by browsers). `StaticCanvasRenderConfig` gains optional `animationClock` and `dirtyRect`; `updateImageCache` accepts `createCanvas`.
+
 ### Export API: `exportScene` (2026-10-18) [#12347](https://github.com/excalidraw/excalidraw/pull/12347)
 
 Breaking. `exportToCanvas`, `exportToBlob` and `exportToSvg` (in both `@excalidraw/excalidraw` and `@excalidraw/utils`) are replaced by a single `exportScene`, and every rendering option moved from `appState` into an explicit `config`.

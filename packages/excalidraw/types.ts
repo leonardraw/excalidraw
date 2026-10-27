@@ -8,6 +8,7 @@ import type {
 } from "@excalidraw/common";
 
 import type { LinearElementEditor } from "@excalidraw/element";
+import type { AnimatedImage } from "@excalidraw/element/animatedImage";
 
 import type {
   ListMarkerAdvance,
@@ -1220,6 +1221,8 @@ export type AppClassProperties = {
     {
       image: HTMLImageElement | Promise<HTMLImageElement>;
       mimeType: ValueOf<typeof IMAGE_MIME_TYPES>;
+      /** decoded frames of an animated image; `null` for static images */
+      animation?: AnimatedImage | null;
     }
   >;
   files: BinaryFiles;

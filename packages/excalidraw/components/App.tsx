@@ -207,7 +207,10 @@ import {
   isEligibleFrameChildType,
   getBindingStrategyForDraggingBindingElementEndpoints,
   isNonDeletedElement,
+  getElementAbsoluteCoords,
 } from "@excalidraw/element";
+
+import { getAnimatedImageFrame } from "@excalidraw/element/animatedImage";
 
 import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
 
@@ -358,7 +361,10 @@ import {
   getViewportForZoomWithScrollConstraints,
 } from "../viewport";
 import { ElementCanvasButtons } from "../components/ElementCanvasButtons";
+
 import { LaserTrails } from "../laserTrails";
+import { AnimationController } from "../renderer/animation";
+import { repaintStaticSceneRegion } from "../renderer/staticScene";
 import { withBatchedUpdates, withBatchedUpdatesThrottled } from "../reactUtils";
 import { isOverScrollBars } from "../scene/scrollbars";
 import { LassoTrail } from "../lasso";
@@ -2638,6 +2644,7 @@ class App extends React.Component<AppProps, AppState> {
                             appState={this.state}
                             renderConfig={{
                               imageCache: this.imageCache,
+                              animationClock: this.animatedImagesClock,
                               isExporting: false,
                               scale: this.ownerWindow.devicePixelRatio,
                               renderEnvironment: this.renderEnvironment,
@@ -3856,6 +3863,8 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     this.scene.onUpdate(this.triggerRender);
+    // (re)starts the animated-images loop whenever the scene changes
+    this.scene.onUpdate(this.syncAnimatedImagesLoop);
     this.addEventListeners();
 
     if (this.props.autoFocus && this.excalidrawContainerRef.current) {
@@ -3946,6 +3955,7 @@ class App extends React.Component<AppProps, AppState> {
     this.removeEventListeners();
     this.library.destroy();
     this.laserTrails.stop();
+    AnimationController.cancel(this.animatedImagesAnimationKey);
     this.drawShape.stop();
     this.toolDrag.cancel();
     this.eraserTrail.stop();
@@ -10609,7 +10619,9 @@ class App extends React.Component<AppProps, AppState> {
       fileIds: elements.map((element) => element.fileId),
       files,
       createImage: () => this.renderEnvironment.createImage(),
+      createCanvas: () => this.renderEnvironment.createCanvas(),
     });
+    this.syncAnimatedImagesLoop();
 
     if (erroredFiles.size) {
       this.store.scheduleAction(CaptureUpdateAction.NEVER);
@@ -10629,6 +10641,85 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     return { updatedFiles, erroredFiles };
+  };
+
+  // ---------------------------------------------------------------------
+  // animated images
+  // ---------------------------------------------------------------------
+
+  private readonly animatedImagesClock = { time: 0 };
+  private animatedImagesPresent = false;
+  private readonly animatedImagesAnimationKey = Symbol("animatedImages");
+  private getAnimatedImageElements = () =>
+    this.scene
+      .getNonDeletedElements()
+      .filter(
+        (
+          element,
+        ): element is Ordered<NonDeleted<InitializedExcalidrawImageElement>> =>
+          isInitializedImageElement(element) &&
+          !!this.imageCache.get(element.fileId)?.animation,
+      );
+  private hasAnimatedImages = () => this.getAnimatedImageElements().length > 0;
+  /**
+   * Runs while the scene holds animated images. On each tick, if at least
+   * one of them moved to another frame, only the union of their rectangles
+   * is repainted, straight on the static canvas (no React render). A full
+   * render only happens when the canvas hasn't been rendered yet.
+   */
+  private syncAnimatedImagesLoop = () => {
+    this.animatedImagesPresent = this.hasAnimatedImages();
+    if (!this.animatedImagesPresent) {
+      return;
+    }
+    AnimationController.start(
+      this.animatedImagesAnimationKey,
+      () => {
+        if (!this.animatedImagesPresent) {
+          return null;
+        }
+        const now = performance.now();
+        const previous = this.animatedImagesClock.time;
+        let dirty: { x1: number; y1: number; x2: number; y2: number } | null =
+          null;
+        const elementsMap = this.scene.getNonDeletedElementsMap();
+        for (const element of this.getAnimatedImageElements()) {
+          const animation = this.imageCache.get(element.fileId)!.animation!;
+          if (
+            getAnimatedImageFrame(animation, now) ===
+            getAnimatedImageFrame(animation, previous)
+          ) {
+            continue;
+          }
+          const [x1, y1, x2, y2] = getElementAbsoluteCoords(
+            element,
+            elementsMap,
+          );
+          dirty = dirty
+            ? {
+                x1: Math.min(dirty.x1, x1),
+                y1: Math.min(dirty.y1, y1),
+                x2: Math.max(dirty.x2, x2),
+                y2: Math.max(dirty.y2, y2),
+              }
+            : { x1, y1, x2, y2 };
+        }
+        if (dirty) {
+          this.animatedImagesClock.time = now;
+          const repainted = repaintStaticSceneRegion(this.canvas, {
+            x: dirty.x1,
+            y: dirty.y1,
+            width: dirty.x2 - dirty.x1,
+            height: dirty.y2 - dirty.y1,
+          });
+          if (!repainted) {
+            this.triggerRender(true);
+          }
+        }
+        return { running: true };
+      },
+      this.ownerWindow,
+    );
   };
 
   /** adds new images to imageCache and re-renders if needed */

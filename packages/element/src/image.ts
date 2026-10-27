@@ -10,6 +10,7 @@ import type {
   BinaryFiles,
 } from "@excalidraw/excalidraw/types";
 
+import { decodeAnimatedGif } from "./animatedImage";
 import { getRenderEnvironment } from "./renderEnvironment";
 import { isInitializedImageElement } from "./typeChecks";
 
@@ -43,6 +44,7 @@ export const updateImageCache = async ({
   files,
   imageCache,
   createImage,
+  createCanvas,
 }: {
   fileIds: FileId[];
   files: BinaryFiles;
@@ -50,6 +52,8 @@ export const updateImageCache = async ({
   /** creates images in the owner window so cross-document scenes keep
    * runtime ownership of their HTMLImageElements */
   createImage?: () => HTMLImageElement;
+  /** creates the canvases animated images are decoded into (owner window) */
+  createCanvas?: () => HTMLCanvasElement;
 }) => {
   const updatedFiles = new Map<FileId, true>();
   const erroredFiles = new Map<FileId, true>();
@@ -80,7 +84,16 @@ export const updateImageCache = async ({
 
               const image = await imagePromise;
 
-              imageCache.set(fileId, { ...data, image });
+              // animated GIFs are decoded once into frames; `null` otherwise
+              const animation =
+                fileData.mimeType === MIME_TYPES.gif
+                  ? await decodeAnimatedGif(
+                      fileData.dataURL,
+                      createCanvas ?? (() => document.createElement("canvas")),
+                    ).catch(() => null)
+                  : null;
+
+              imageCache.set(fileId, { ...data, image, animation });
             } catch (error: any) {
               erroredFiles.set(fileId, true);
             }

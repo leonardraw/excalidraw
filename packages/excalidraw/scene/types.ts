@@ -47,6 +47,17 @@ export type StaticCanvasRenderConfig = {
   // extra options passed to the renderer
   // ---------------------------------------------------------------------------
   imageCache: AppClassProperties["imageCache"];
+  /**
+   * Animation clock animated images are drawn from. A stable object mutated
+   * in place (not a number) so that advancing it doesn't invalidate the
+   * StaticCanvas memoization.
+   */
+  animationClock?: { time: number };
+  /**
+   * Scene-coordinates region to repaint. When set, only this region is
+   * cleared and redrawn (used by animated images between full renders).
+   */
+  dirtyRect?: { x: number; y: number; width: number; height: number };
   renderGrid: boolean;
   /** whether to render link icons on elements with links (never rendered
    when exporting). @default true */

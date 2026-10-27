@@ -330,21 +330,52 @@ const renderLinkIcon = (
     context.restore();
   }
 };
-const _renderStaticScene = ({
-  canvas,
-  rc,
-  elementsMap,
-  allElementsMap,
-  visibleElements,
-  scale,
-  appState: unsnappedAppState,
-  renderConfig,
-}: StaticSceneRenderConfig) => {
+// the last config each canvas was fully rendered with, so a region can be
+// repainted (animated images) without going through React
+const lastStaticSceneConfigs = new WeakMap<
+  HTMLCanvasElement,
+  StaticSceneRenderConfig
+>();
+
+/**
+ * Repaints only `rect` (scene coordinates) with the config the canvas was
+ * last fully rendered with. Returns false when the canvas hasn't been
+ * rendered yet, in which case a full render is needed.
+ */
+export const repaintStaticSceneRegion = (
+  canvas: HTMLCanvasElement,
+  rect: NonNullable<StaticCanvasRenderConfig["dirtyRect"]>,
+) => {
+  const last = lastStaticSceneConfigs.get(canvas);
+  if (!last) {
+    return false;
+  }
+  _renderStaticScene({
+    ...last,
+    renderConfig: { ...last.renderConfig, dirtyRect: rect },
+  });
+  return true;
+};
+
+const _renderStaticScene = (config: StaticSceneRenderConfig) => {
+  const {
+    canvas,
+    rc,
+    elementsMap,
+    allElementsMap,
+    scale,
+    appState: unsnappedAppState,
+    renderConfig,
+  } = config;
+  let { visibleElements } = config;
   if (canvas === null) {
     return;
   }
 
-  const { renderGrid = true, isExporting } = renderConfig;
+  const { renderGrid = true, isExporting, dirtyRect } = renderConfig;
+  if (!dirtyRect) {
+    lastStaticSceneConfigs.set(canvas, config);
+  }
   // export draws vectors, not cached bitmaps — nothing to keep on the grid
   const appState = isExporting
     ? unsnappedAppState
@@ -355,15 +386,55 @@ const _renderStaticScene = ({
     scale,
   );
 
-  const context = bootstrapCanvas({
-    canvas,
-    scale,
-    normalizedWidth,
-    normalizedHeight,
-    theme: appState.theme,
-    isExporting,
-    viewBackgroundColor: appState.viewBackgroundColor,
-  });
+  let context: CanvasRenderingContext2D;
+  if (dirtyRect) {
+    // partial repaint: clip to the dirty region, clear and refill its
+    // background, and only redraw the elements intersecting it
+    const zoom = appState.zoom.value;
+    const margin = 16; // roughjs strokes overflow element bounds (scene units)
+    const vx = (dirtyRect.x - margin + appState.scrollX) * zoom;
+    const vy = (dirtyRect.y - margin + appState.scrollY) * zoom;
+    const vw = (dirtyRect.width + margin * 2) * zoom;
+    const vh = (dirtyRect.height + margin * 2) * zoom;
+    context = canvas.getContext("2d")!;
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.scale(scale, scale);
+    context.beginPath();
+    context.rect(vx, vy, vw, vh);
+    context.clip();
+    context.clearRect(vx, vy, vw, vh);
+    if (
+      typeof appState.viewBackgroundColor === "string" &&
+      appState.viewBackgroundColor !== "transparent"
+    ) {
+      context.fillStyle = applyDarkModeFilter(
+        appState.viewBackgroundColor,
+        appState.theme === THEME.DARK,
+      );
+      context.fillRect(vx, vy, vw, vh);
+    }
+    const x1 = dirtyRect.x - margin;
+    const y1 = dirtyRect.y - margin;
+    const x2 = dirtyRect.x + dirtyRect.width + margin;
+    const y2 = dirtyRect.y + dirtyRect.height + margin;
+    visibleElements = visibleElements.filter((element) => {
+      const [ex1, ey1, ex2, ey2] = getElementAbsoluteCoords(
+        element,
+        elementsMap,
+      );
+      return ex2 >= x1 && ex1 <= x2 && ey2 >= y1 && ey1 <= y2;
+    });
+  } else {
+    context = bootstrapCanvas({
+      canvas,
+      scale,
+      normalizedWidth,
+      normalizedHeight,
+      theme: appState.theme,
+      isExporting,
+      viewBackgroundColor: appState.viewBackgroundColor,
+    });
+  }
 
   // Apply zoom
   context.scale(appState.zoom.value, appState.zoom.value);
