@@ -13,6 +13,10 @@ Please add the latest change on the top under the correct section.
 
 ## Unreleased
 
+### `renderEmbeddableStatic` for SVG export
+
+`exportScene({ type: "svg", config: { renderEmbeddableStatic } })` (and `exportToClipboard`) accept a callback that returns, per `embeddable` element, an SVG node in the element's local coordinates. The export positions, rotates and fades it like the element; `null` keeps the default placeholder. It is the export-time counterpart of `renderEmbeddable`: hosts that render embeddables with React can now export them as something better than a grey rectangle.
+
 ### Flowchart navigation (2026-10-30) [#12502](https://github.com/excalidraw/excalidraw/pull/12502)
 
 - Alt+arrow keys move the selection to the flowchart node that's visually next in that direction, whether or not it's linked to the selected node. They used to follow only the arrows bound to the pressed side, cycle through siblings on repeated presses, and fall back to any linked node when nothing was that way.

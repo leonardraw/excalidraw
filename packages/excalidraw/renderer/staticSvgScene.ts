@@ -28,6 +28,7 @@ import { getBoundTextElement, getContainerElement } from "@excalidraw/element";
 import { getLineHeightInPx } from "@excalidraw/element";
 import {
   isArrowElement,
+  isEmbeddableElement,
   isIframeLikeElement,
   isInitializedImageElement,
   isTextElement,
@@ -302,6 +303,26 @@ const renderElementToSvg = (
     }
     case "iframe":
     case "embeddable": {
+      // host-supplied static rendering (e.g. widgets)
+      if (isEmbeddableElement(element) && renderConfig.renderEmbeddableStatic) {
+        const custom = renderConfig.renderEmbeddableStatic(
+          element,
+          svgRoot.ownerDocument,
+        );
+        if (custom) {
+          custom.setAttribute(
+            "transform",
+            `translate(${offsetX || 0} ${
+              offsetY || 0
+            }) rotate(${degree} ${cx} ${cy})`,
+          );
+          if (element.opacity !== 100) {
+            custom.setAttribute("opacity", `${element.opacity / 100}`);
+          }
+          addToRoot(custom, element);
+          break;
+        }
+      }
       // render placeholder rectangle
       const shape = ShapeCache.generateElementShape(element, renderConfig);
       const node = roughSVGDrawWithPrecision(

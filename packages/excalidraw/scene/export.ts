@@ -72,7 +72,7 @@ import {
   copyToClipboard,
 } from "../clipboard";
 
-import type { RenderableElementsMap } from "./types";
+import type { RenderEmbeddableStatic, RenderableElementsMap } from "./types";
 
 import type { AppState, BinaryFiles, NormalizedZoomValue } from "../types";
 
@@ -950,6 +950,8 @@ type ExportToSvgConfig = Pick<
      * if true, all embeddables passed in will be rendered when possible.
      */
     renderEmbeddables?: boolean;
+    /** static SVG rendering of embeddables supplied by the host */
+    renderEmbeddableStatic?: RenderEmbeddableStatic;
     skipInliningFonts?: true;
     reuseImages?: boolean;
     /**
@@ -1168,6 +1170,7 @@ const exportToSvg = async ({
       renderEnvironment,
       exportWithDarkMode,
       renderEmbeddables,
+      renderEmbeddableStatic: config?.renderEmbeddableStatic,
       frameRendering,
       canvasBackgroundColor: backgroundColor,
       embedsValidationStatus: renderEmbeddables

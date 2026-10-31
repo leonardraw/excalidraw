@@ -194,3 +194,23 @@ Copies the scene data in the specified format (determined by `type`) to clipboar
 | `viewBackgroundColor` | `string` | `#fff` | The default background color |
 | `exportWithDarkMode` | `boolean` | `false` | Indicates whether to export with `dark` mode |
 | `exportEmbedScene` | `boolean` | `false` | Indicates whether scene data should be embedded in `svg/png`. This will increase the image size. |
+
+## Static rendering of embeddables (SVG)
+
+When you render `embeddable` elements yourself with [`renderEmbeddable`](/docs/@excalidraw/excalidraw/api/props/render-props#renderembeddable), the SVG export draws a grey placeholder for them. Pass `renderEmbeddableStatic` in the SVG config to supply a static rendering instead:
+
+```ts
+const svg = await exportScene({
+  type: "svg",
+  data: { elements, appState, files },
+  config: {
+    renderEmbeddableStatic: (element, document) => {
+      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      text.textContent = element.customData?.title ?? "widget";
+      return text; // local coordinates: (0, 0) is the element's top-left corner
+    },
+  },
+});
+```
+
+The export positions, rotates and applies the element's opacity to the returned node. Return `null` to keep the default placeholder for that element.

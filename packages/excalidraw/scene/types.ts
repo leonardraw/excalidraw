@@ -1,5 +1,7 @@
 import type { UserIdleState, EditorInterface } from "@excalidraw/common";
 import type {
+  ExcalidrawEmbeddableElement,
+  NonDeleted,
   ExcalidrawElement,
   ExcalidrawFrameLikeElement,
   NonDeletedElementsMap,
@@ -61,6 +63,11 @@ export type StaticCanvasRenderConfig = {
   elementRenderOverrides?: ElementRenderOverrides;
 };
 
+export type RenderEmbeddableStatic = (
+  element: NonDeleted<ExcalidrawEmbeddableElement>,
+  document: Document,
+) => SVGElement | null;
+
 export type SVGRenderConfig = {
   /**
    * Host environment used for the text measurements this render needs (the
@@ -73,6 +80,13 @@ export type SVGRenderConfig = {
   isExporting: boolean;
   exportWithDarkMode: boolean;
   renderEmbeddables: boolean;
+  /**
+   * Static SVG rendering of an embeddable, supplied by the host (e.g. for
+   * widgets it renders with `renderEmbeddable`). Return an SVG node in the
+   * element's local coordinates (origin = top-left corner), or null to keep
+   * the default placeholder.
+   */
+  renderEmbeddableStatic?: RenderEmbeddableStatic;
   frameRendering: AppState["frameRendering"];
   canvasBackgroundColor: AppState["viewBackgroundColor"];
   embedsValidationStatus: EmbedsValidationStatus;
